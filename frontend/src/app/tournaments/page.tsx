@@ -8,12 +8,28 @@ import { fetchApiClient } from "@/lib/api";
 export default function TournamentsPage() {
   const [query, setQuery] = useState("");
   const [season, setSeason] = useState("");
+  const [seasons, setSeasons] = useState<string[]>([]);
   const [results, setResults] = useState<TournamentSearchResult[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
+  // Load seasons on mount, default to most recent
   useEffect(() => {
+    (async () => {
+      try {
+        const data = await fetchApiClient<string[]>("/tournaments/seasons");
+        setSeasons(data);
+        if (data.length > 0) setSeason(data[0]);
+      } catch {
+        // fallback
+      }
+    })();
+  }, []);
+
+  // Fetch tournaments when filters change
+  useEffect(() => {
+    if (!season && seasons.length === 0) return; // wait for seasons to load
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
@@ -30,7 +46,7 @@ export default function TournamentsPage() {
       }
       setLoading(false);
     }, 300);
-  }, [query, season]);
+  }, [query, season, seasons]);
 
   return (
     <div>
@@ -52,20 +68,25 @@ export default function TournamentsPage() {
           className="flex-1 max-w-sm border border-gray-300 px-3 py-2 text-sm rounded"
           autoFocus
         />
-        <input
-          type="text"
-          placeholder="Season (e.g., 2025-2026)"
+        <select
           value={season}
           onChange={(e) => setSeason(e.target.value)}
-          className="w-48 border border-gray-300 px-3 py-2 text-sm rounded"
-        />
+          className="w-48 border border-gray-300 px-3 py-2 text-sm rounded bg-white"
+        >
+          <option value="">All seasons</option>
+          {seasons.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
       </div>
 
       {loading && (
-        <p className="text-xs text-gray-400">Searching...</p>
+        <p className="text-xs text-gray-400">Loading...</p>
       )}
 
-      {results.length > 0 && (
+      {!loading && results.length > 0 && (
         <table className="sr-table" style={{ maxWidth: 700 }}>
           <thead>
             <tr>

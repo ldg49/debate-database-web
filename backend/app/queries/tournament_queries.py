@@ -1,3 +1,10 @@
+SEASONS = """
+    SELECT DISTINCT season
+    FROM tournament
+    WHERE is_active IS NOT FALSE AND season IS NOT NULL
+    ORDER BY season DESC
+"""
+
 SEARCH_TOURNAMENTS = """
     SELECT id, name, season, start_date
     FROM tournament

@@ -5,6 +5,13 @@ from ..queries import tournament_queries as q
 router = APIRouter(tags=["tournaments"])
 
 
+@router.get("/tournaments/seasons")
+async def get_seasons():
+    pool = await get_pool()
+    rows = await pool.fetch(q.SEASONS)
+    return [r["season"] for r in rows]
+
+
 @router.get("/tournaments")
 async def search_tournaments(
     search: str = Query(None, alias="q"),
