@@ -11,42 +11,59 @@ router = APIRouter(prefix="/ai", tags=["ai"])
 SCHEMA_CONTEXT = """
 You are a SQL query generator for a college policy debate database (PostgreSQL).
 
-## Tables
+## Core Tables
 
 tournament(id, name, season, start_date, end_date, is_active, year)
 round(id, tournament_id FK, round_number, round_type ['prelim'/'elim'], source, is_active)
 team(id, tournament_id FK, team_name, is_active)
+  - team_name format: "School XY" (e.g., "Northwestern FM", "Kansas LS")
+  - XY are alphabetically sorted initials of the two debaters
+  - To find teams from a school: WHERE t.team_name LIKE 'Northwestern %'
 debater(id, debater_id, first_name, last_name, tournament_id FK, is_active)
-  - debater_id is a code like 'JSMITH' (first initial + last name)
+  - debater_id is a code like 'JSMITH' (first initial + last name, uppercase)
   - Same person across tournaments shares debater_id + first_name + last_name
+  - Each tournament creates a separate debater row for the same person
 judge(id, name, tournament_id FK, is_active)
-team_debater(team_id FK, debater_id FK)
+  - Each tournament creates a separate judge row for the same person
+  - To find a judge across tournaments: WHERE j.name ILIKE '%LastName%'
+team_debater(team_id FK, debater_id FK) - links debaters to their team
 round_result(id, round_id FK, aff_team_id FK, neg_team_id FK, winner, ballot_count, result_type, is_active)
-  - winner: 1=Aff won, 2=Neg won, -1=Closeout
+  - winner: 1=Aff won, 2=Neg won, -1=Closeout (same school)
   - result_type: NULL=normal, 'bye', 'forfeit', 'closeout', 'inferred'
+  - A team won if: (aff_team_id = team.id AND winner = 1) OR (neg_team_id = team.id AND winner = 2)
 round_debater_point(round_result_id FK, debater_id FK, points, speaking_order, polarity, is_maverick)
-  - polarity: 1=Aff, 2=Neg
   - points are speaker points (prelim rounds only; NULL in elims)
 round_judges_vote(id, round_result_id FK, judge_id FK, vote, is_active)
-  - vote: 1=Aff, 2=Neg
-known_data_issues(id, round_result_id, issue_type, notes, year, created_at)
+  - vote: 1=voted Aff, 2=voted Neg
 tournament_placement(id, tournament_id FK, team_id FK, place)
 
-## Useful Views (prefer these for aggregate queries)
+## Pre-aggregated Views
 
-debater_career_stats - pre-aggregated career stats per debater
-team_tournament_stats - team stats per tournament
+debater_career_stats(debater_code, first_name, last_name, total_wins, total_losses, win_percentage, prelim_wins, prelim_losses, elim_wins, elim_losses, total_speaker_points, avg_speaker_points, prelim_rounds_with_points, tournaments_attended, first_tournament_date, last_tournament_date)
+  - Use for: career records, top debaters overall, speaker point rankings
+  - Does NOT have school info; to filter by school, join through debater/team tables
 
-## Elim round names (round_number values for elims)
-Finals, Semis, Quarters, Octas, Doubles, Triples, Runoff
+team_tournament_stats(id, team_id, tournament_id, team_name, tournament_name, tournament_year, prelim_wins, prelim_losses, prelim_record, total_speaker_points, avg_speaker_points, elim_wins, elim_losses, deepest_elim, last_updated)
+  - Use for: team records at specific tournaments, tournament performance
 
-## Rules
-- Team names: "School XY" where XY are alphabetically sorted initials
-- Seasons span two academic years (e.g., season '2024' = Fall 2024 + Spring 2025)
-- Filter is_active = TRUE for current/valid records
-- Use ILIKE for case-insensitive text search
+## Key Patterns
 
-Generate ONLY a single SELECT query. No explanations, no markdown, just the raw SQL.
+To count wins for a debater at a school (e.g., "most wins for Northwestern"):
+  JOIN debater d -> team_debater td -> team t -> round_result rr
+  WHERE t.team_name LIKE 'Northwestern %'
+  AND ((rr.aff_team_id = t.id AND rr.winner = 1) OR (rr.neg_team_id = t.id AND rr.winner = 2))
+  Use COUNT(DISTINCT rr.id) to avoid double-counting from joins.
+
+To find a specific person: WHERE d.first_name ILIKE '%name%' OR d.last_name ILIKE '%name%'
+
+## Important Rules
+- Elim round names stored in round_number: Finals, Semis, Quarters, Octas, Doubles, Triples, Runoff
+- Seasons span two academic years (season '2024' = Fall 2024 + Spring 2025)
+- Filter is_active = TRUE and result_type IS DISTINCT FROM 'bye' to exclude BYEs
+- For "most" or "best" questions, return TOP 20 (not just 1) unless user asks for exactly 1
+- Always use COUNT(DISTINCT rr.id) when counting wins/losses through joins to avoid duplicates
+
+Generate ONLY a single SELECT query. No explanations, no markdown, just raw SQL.
 """
 
 DISALLOWED_PATTERN = re.compile(
