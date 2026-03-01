@@ -106,20 +106,33 @@ TOURNAMENT_LIST = """
             (rr.neg_team_id = tm.id AND rr.winner = 1))
         ) as losses,
         ROUND(AVG(rdp.points)::numeric, 1) as avg_sp,
-        MAX(CASE
-            WHEN r.round_type = 'elim' THEN
-                CASE
-                    WHEN LOWER(r.round_number) LIKE '%final%' AND LOWER(r.round_number) NOT LIKE '%semi%' THEN 'Finals'
-                    WHEN LOWER(r.round_number) LIKE '%semi%' THEN 'Semis'
-                    WHEN LOWER(r.round_number) LIKE '%quarter%' THEN 'Quarters'
-                    WHEN LOWER(r.round_number) LIKE '%octa%' OR LOWER(r.round_number) LIKE '%octo%' THEN 'Octas'
-                    WHEN LOWER(r.round_number) LIKE '%double%' THEN 'Doubles'
-                    WHEN LOWER(r.round_number) LIKE '%triple%' THEN 'Triples'
-                    WHEN LOWER(r.round_number) LIKE '%runoff%' THEN 'Runoff'
-                    ELSE r.round_number
-                END
-            ELSE NULL
-        END) as elim_result
+        (SELECT CASE
+            WHEN sub_r.round_number = 'Finals' AND (
+                (sub_rr.aff_team_id = tm.id AND sub_rr.winner = 1) OR
+                (sub_rr.neg_team_id = tm.id AND sub_rr.winner = 2) OR
+                sub_rr.winner = -1
+            ) THEN 'Champion'
+            WHEN sub_r.round_number = 'Finals' THEN 'Finalist'
+            ELSE sub_r.round_number
+        END
+        FROM round sub_r
+        JOIN round_result sub_rr ON sub_rr.round_id = sub_r.id
+        WHERE sub_r.tournament_id = t.id
+            AND sub_r.round_type = 'elim'
+            AND sub_r.is_active IS NOT FALSE
+            AND sub_rr.is_active IS NOT FALSE
+            AND (sub_rr.aff_team_id = tm.id OR sub_rr.neg_team_id = tm.id)
+        ORDER BY CASE sub_r.round_number
+            WHEN 'Runoff' THEN 1
+            WHEN 'Triples' THEN 2
+            WHEN 'Doubles' THEN 3
+            WHEN 'Octas' THEN 4
+            WHEN 'Quarters' THEN 5
+            WHEN 'Semis' THEN 6
+            WHEN 'Finals' THEN 7
+            ELSE 0
+        END DESC
+        LIMIT 1) as elim_result
     FROM debater d
     JOIN team_debater td ON d.id = td.debater_id
     JOIN team tm ON td.team_id = tm.id
@@ -130,7 +143,7 @@ TOURNAMENT_LIST = """
     LEFT JOIN round_debater_point rdp ON rdp.round_result_id = rr.id AND rdp.debater_id = d.id
         AND r.round_type = 'prelim'
     WHERE d.debater_id = $1 AND d.is_active IS NOT FALSE
-    GROUP BY t.id, t.name, t.season, t.start_date, tm.team_name
+    GROUP BY t.id, t.name, t.season, t.start_date, tm.id, tm.team_name
     ORDER BY t.start_date ASC
 """
 
