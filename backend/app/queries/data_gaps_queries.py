@@ -66,6 +66,17 @@ WHERE t.is_active IS NOT FALSE
 ORDER BY t.start_date DESC, t.name
 """
 
+KNOWN_ISSUE_NOTES = """
+SELECT
+    r.tournament_id,
+    ki.issue_type,
+    ki.notes
+FROM known_data_issues ki
+JOIN round_result rr ON rr.id = ki.round_result_id
+JOIN round r ON r.id = rr.round_id
+ORDER BY r.tournament_id, ki.id
+"""
+
 TOURNAMENT_GAPS_BY_SEASON = """
 WITH debate_counts AS (
     SELECT

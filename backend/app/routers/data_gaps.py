@@ -13,6 +13,13 @@ async def get_data_gaps(season: str = Query(None)):
     else:
         rows = await pool.fetch(q.TOURNAMENT_GAPS)
 
+    # Build lookup of issue notes per tournament
+    issue_rows = await pool.fetch(q.KNOWN_ISSUE_NOTES)
+    issue_notes: dict[int, list[str]] = {}
+    for ir in issue_rows:
+        tid = ir["tournament_id"]
+        issue_notes.setdefault(tid, []).append(ir["notes"])
+
     tournaments = []
     summary = {
         "no_results": 0,
@@ -55,8 +62,10 @@ async def get_data_gaps(season: str = Query(None)):
                 gaps.append("missing_prelims")
                 summary["missing_prelims"] += 1
             if prelim > 0 and prelim_with_sp < prelim:
-                gaps.append("missing_speaker_points")
-                summary["missing_speaker_points"] += 1
+                sp_ratio = prelim_with_sp / prelim
+                if sp_ratio < 0.5:
+                    gaps.append("missing_speaker_points")
+                    summary["missing_speaker_points"] += 1
 
         if missing_names > 0:
             gaps.append("missing_names")
@@ -90,6 +99,7 @@ async def get_data_gaps(season: str = Query(None)):
                 "total_debaters": total_debaters,
                 "name_coverage_pct": name_pct,
                 "known_issues": known_issues,
+                "issue_notes": issue_notes.get(row["id"], []),
                 "gaps": gaps,
             }
         )

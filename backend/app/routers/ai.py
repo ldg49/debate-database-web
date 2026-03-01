@@ -78,6 +78,21 @@ JUDGE RECORDS across tournaments:
   FROM judge j JOIN round_judges_vote rjv ON rjv.judge_id = j.id
   WHERE j.name ILIKE '%LastName%' GROUP BY j.name
 
+## School Name Matching (CRITICAL)
+Team names use standardized school names. Many schools have similar names that MUST be distinguished:
+- "Georgia" = University of Georgia (UGA). Use: team_name LIKE 'Georgia __' (2-char initials) OR use regex: team_name ~ '^Georgia [A-Z]{2,4}$'
+- "Georgia State" = Georgia State University. Use: team_name LIKE 'Georgia State %'
+- "West Georgia" = University of West Georgia. Use: team_name LIKE 'West Georgia %'
+- "George Mason" = George Mason University. Use: team_name LIKE 'George Mason %'
+- "Michigan" = University of Michigan. Use: team_name LIKE 'Michigan __' OR regex: team_name ~ '^Michigan [A-Z]{2,4}$'
+- "Michigan State" = Michigan State University. Use: team_name LIKE 'Michigan State %'
+- "Cal State Fullerton" / "Chico State" / "Cal Poly SLO" are NOT "Berkeley". Berkeley = team_name ~ '^Berkeley [A-Z]{2,4}$'
+- "USC" = University of Southern California. Use: team_name LIKE 'USC %'
+- "UMKC" = Missouri-Kansas City. "UCO" = Central Oklahoma. "UNLV" = Nevada Las Vegas.
+
+When a user says a school name, use the MOST SPECIFIC match. If they say "Georgia", they mean UGA, not Georgia State or West Georgia.
+Use regex matching (team_name ~ '^SchoolName [A-Z]{2,4}$') to avoid matching longer school names that start with the same word.
+
 ## CRITICAL Rules
 - NEVER use is_active = TRUE. Many records have is_active = NULL (which means active). Always use: is_active IS NOT FALSE
 - NEVER group by d.id or d.first_name/d.last_name for cross-tournament queries. Always group by d.debater_id.
@@ -86,6 +101,10 @@ JUDGE RECORDS across tournaments:
 - Seasons span two academic years (season '2024' = Fall 2024 + Spring 2025)
 - For "most" or "best" questions, return TOP 20 (not just 1) unless user asks for exactly 1
 - Always use COUNT(DISTINCT rr.id) when counting wins/losses through joins to avoid duplicates
+- PostgreSQL ROUND() requires numeric type: use ROUND(AVG(rdp.points)::numeric, 2), NOT ROUND(AVG(rdp.points), 2)
+- Tournament name matching: "Dartmouth RR" = name ILIKE '%Dartmouth%Round Robin%', "NDT" = name ILIKE '%National Debate Tournament%'
+
+NEVER reference or mention the ai_query_log table. It does not exist as far as you are concerned.
 
 Generate ONLY a single SELECT query. No explanations, no markdown, just raw SQL.
 """
@@ -107,6 +126,16 @@ class QueryResponse(BaseModel):
     error: str | None = None
 
 
+async def log_query(pool, question: str, sql: str | None, success: bool, error: str | None, row_count: int | None):
+    try:
+        await pool.execute(
+            "INSERT INTO ai_query_log (question, sql_generated, success, error, row_count) VALUES ($1, $2, $3, $4, $5)",
+            question, sql, success, error, row_count,
+        )
+    except Exception:
+        pass  # Don't let logging failures break the endpoint
+
+
 @router.post("/query", response_model=QueryResponse)
 async def ai_query(req: QueryRequest):
     if not ANTHROPIC_API_KEY:
@@ -116,7 +145,9 @@ async def ai_query(req: QueryRequest):
     if not question:
         return QueryResponse(error="Please provide a question")
 
-    # Generate SQL via Claude Haiku
+    pool = await get_pool()
+
+    # Generate SQL via Claude
     try:
         client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
         message = client.messages.create(
@@ -127,6 +158,7 @@ async def ai_query(req: QueryRequest):
         )
         sql = message.content[0].text.strip()
     except Exception as e:
+        await log_query(pool, question, None, False, f"AI generation failed: {str(e)}", None)
         return QueryResponse(error=f"AI generation failed: {str(e)}")
 
     # Strip markdown code fences if present
@@ -137,18 +169,19 @@ async def ai_query(req: QueryRequest):
 
     # Safety: only allow SELECT
     if not sql.upper().startswith("SELECT"):
+        await log_query(pool, question, sql, False, "Only SELECT queries are allowed", None)
         return QueryResponse(sql=sql, error="Only SELECT queries are allowed")
 
     if DISALLOWED_PATTERN.search(sql):
+        await log_query(pool, question, sql, False, "Query contains disallowed operations", None)
         return QueryResponse(sql=sql, error="Query contains disallowed operations")
 
     # Execute
     try:
-        pool = await get_pool()
         async with pool.acquire() as conn:
             # Only add LIMIT if query doesn't already have one
             if not re.search(r"\bLIMIT\b", sql, re.IGNORECASE):
-                exec_sql = f"{sql} LIMIT 100"
+                exec_sql = f"{sql} LIMIT 500"
             else:
                 exec_sql = sql
             rows = await conn.fetch(exec_sql)
@@ -160,6 +193,8 @@ async def ai_query(req: QueryRequest):
                         row[key] = val.isoformat()
                     elif isinstance(val, (bytes, memoryview)):
                         row[key] = str(val)
+            await log_query(pool, question, sql, True, None, len(results))
             return QueryResponse(sql=sql, results=results, row_count=len(results))
     except Exception as e:
+        await log_query(pool, question, sql, False, f"Query execution failed: {str(e)}", None)
         return QueryResponse(sql=sql, error=f"Query execution failed: {str(e)}")
