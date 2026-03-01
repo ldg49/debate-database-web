@@ -48,16 +48,39 @@ team_tournament_stats(id, team_id, tournament_id, team_name, tournament_name, to
 
 ## Key Patterns
 
-To count wins for a debater at a school (e.g., "most wins for Northwestern"):
-  JOIN debater d -> team_debater td -> team t -> round_result rr
-  WHERE t.team_name LIKE 'Northwestern %'
-  AND ((rr.aff_team_id = t.id AND rr.winner = 1) OR (rr.neg_team_id = t.id AND rr.winner = 2))
-  Use COUNT(DISTINCT rr.id) to avoid double-counting from joins.
+CAREER WINS for a debater (across all tournaments):
+  Always GROUP BY d.debater_id (NOT d.id, NOT d.first_name/last_name alone).
+  debater_id is the cross-tournament identifier. d.id is per-tournament and will produce duplicates.
+  Use MIN(d.first_name), MIN(d.last_name) to get names in the SELECT.
 
-To find a specific person: WHERE d.first_name ILIKE '%name%' OR d.last_name ILIKE '%name%'
+Example - most career wins for a school:
+  SELECT d.debater_id, MIN(d.first_name) as first_name, MIN(d.last_name) as last_name,
+         COUNT(DISTINCT rr.id) as wins
+  FROM debater d
+  JOIN team_debater td ON d.id = td.debater_id
+  JOIN team t ON td.team_id = t.id
+  JOIN round_result rr ON rr.is_active IS NOT FALSE
+    AND ((rr.aff_team_id = t.id AND rr.winner = 1) OR (rr.neg_team_id = t.id AND rr.winner = 2))
+  WHERE t.team_name LIKE 'Northwestern %'
+  GROUP BY d.debater_id
+  ORDER BY wins DESC LIMIT 20
+
+CAREER STATS (no school filter): Use debater_career_stats view directly.
+  SELECT * FROM debater_career_stats ORDER BY total_wins DESC LIMIT 20
+
+TEAM RECORDS at tournaments: Use team_tournament_stats view.
+  SELECT * FROM team_tournament_stats WHERE team_name LIKE 'Kansas %' ORDER BY tournament_year DESC
+
+To find a specific person: WHERE d.last_name ILIKE '%name%' OR d.first_name ILIKE '%name%'
+
+JUDGE RECORDS across tournaments:
+  SELECT j.name, COUNT(DISTINCT rjv.id) as decisions
+  FROM judge j JOIN round_judges_vote rjv ON rjv.judge_id = j.id
+  WHERE j.name ILIKE '%LastName%' GROUP BY j.name
 
 ## CRITICAL Rules
 - NEVER use is_active = TRUE. Many records have is_active = NULL (which means active). Always use: is_active IS NOT FALSE
+- NEVER group by d.id or d.first_name/d.last_name for cross-tournament queries. Always group by d.debater_id.
 - Exclude BYEs with: result_type IS DISTINCT FROM 'bye'
 - Elim round names stored in round_number: Finals, Semis, Quarters, Octas, Doubles, Triples, Runoff
 - Seasons span two academic years (season '2024' = Fall 2024 + Spring 2025)
