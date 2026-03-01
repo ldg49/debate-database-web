@@ -77,7 +77,6 @@ export default async function Home() {
           </h2>
           <p className="text-xs text-gray-600">
             Ask questions in plain English and get answers powered by AI.
-            Try &quot;Who has the most career wins?&quot;
           </p>
         </Link>
       </div>
