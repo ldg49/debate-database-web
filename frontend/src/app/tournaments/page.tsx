@@ -5,11 +5,22 @@ import { useRouter } from "next/navigation";
 import type { TournamentSearchResult } from "@/lib/types";
 import { fetchApiClient } from "@/lib/api";
 
+interface PaginatedResponse {
+  results: TournamentSearchResult[];
+  total: number;
+  page: number;
+  per_page: number;
+  total_pages: number;
+}
+
 export default function TournamentsPage() {
   const [query, setQuery] = useState("");
   const [season, setSeason] = useState("");
   const [seasons, setSeasons] = useState<string[]>([]);
   const [results, setResults] = useState<TournamentSearchResult[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -27,26 +38,35 @@ export default function TournamentsPage() {
     })();
   }, []);
 
-  // Fetch tournaments when filters change
+  // Reset to page 1 when filters change
   useEffect(() => {
-    if (!season && seasons.length === 0) return; // wait for seasons to load
+    setPage(1);
+  }, [query, season]);
+
+  // Fetch tournaments when filters or page change
+  useEffect(() => {
+    if (!season && seasons.length === 0) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    const delay = page === 1 ? 300 : 0; // no debounce on page change
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
       try {
         const params = new URLSearchParams();
         if (query.trim()) params.set("q", query);
         if (season) params.set("season", season);
-        const data = await fetchApiClient<TournamentSearchResult[]>(
+        params.set("page", String(page));
+        const data = await fetchApiClient<PaginatedResponse>(
           `/tournaments?${params.toString()}`
         );
-        setResults(data);
+        setResults(data.results);
+        setTotalPages(data.total_pages);
+        setTotal(data.total);
       } catch {
         setResults([]);
       }
       setLoading(false);
-    }, 300);
-  }, [query, season, seasons]);
+    }, delay);
+  }, [query, season, seasons, page]);
 
   return (
     <div>
@@ -87,30 +107,57 @@ export default function TournamentsPage() {
       )}
 
       {!loading && results.length > 0 && (
-        <table className="sr-table" style={{ maxWidth: 700 }}>
-          <thead>
-            <tr>
-              <th>Tournament</th>
-              <th>Season</th>
-              <th>Date</th>
-            </tr>
-          </thead>
-          <tbody>
-            {results.map((t) => (
-              <tr
-                key={t.id}
-                className="cursor-pointer"
-                onClick={() => router.push(`/tournaments/${t.id}`)}
-              >
-                <td>
-                  <a className="sr-link">{t.name}</a>
-                </td>
-                <td>{t.season}</td>
-                <td>{t.start_date ? new Date(t.start_date).toLocaleDateString() : "-"}</td>
+        <>
+          <p className="text-xs text-gray-500 mb-2">
+            {total} tournament{total !== 1 ? "s" : ""}
+          </p>
+          <table className="sr-table" style={{ maxWidth: 700 }}>
+            <thead>
+              <tr>
+                <th>Tournament</th>
+                <th>Season</th>
+                <th>Date</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {results.map((t) => (
+                <tr
+                  key={t.id}
+                  className="cursor-pointer"
+                  onClick={() => router.push(`/tournaments/${t.id}`)}
+                >
+                  <td>
+                    <a className="sr-link">{t.name}</a>
+                  </td>
+                  <td>{t.season}</td>
+                  <td>{t.start_date ? new Date(t.start_date).toLocaleDateString() : "-"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {totalPages > 1 && (
+            <div className="flex items-center gap-3 mt-3">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="px-3 py-1 text-xs border border-gray-300 rounded disabled:opacity-30"
+              >
+                Previous
+              </button>
+              <span className="text-xs text-gray-600">
+                Page {page} of {totalPages}
+              </span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="px-3 py-1 text-xs border border-gray-300 rounded disabled:opacity-30"
+              >
+                Next
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       {!loading && results.length === 0 && (

@@ -12,7 +12,15 @@ SEARCH_TOURNAMENTS = """
       AND ($1::text IS NULL OR LOWER(name) LIKE LOWER($1))
       AND ($2::text IS NULL OR season = $2)
     ORDER BY start_date DESC NULLS LAST
-    LIMIT 200
+    LIMIT $3 OFFSET $4
+"""
+
+COUNT_TOURNAMENTS = """
+    SELECT COUNT(*) as total
+    FROM tournament
+    WHERE is_active IS NOT FALSE
+      AND ($1::text IS NULL OR LOWER(name) LIKE LOWER($1))
+      AND ($2::text IS NULL OR season = $2)
 """
 
 TOURNAMENT_DETAIL = """

@@ -16,11 +16,22 @@ async def get_seasons():
 async def search_tournaments(
     search: str = Query(None, alias="q"),
     season: str = Query(None),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=200),
 ):
     pool = await get_pool()
     search_param = f"%{search}%" if search else None
-    rows = await pool.fetch(q.SEARCH_TOURNAMENTS, search_param, season)
-    return [dict(r) for r in rows]
+    offset = (page - 1) * per_page
+    rows = await pool.fetch(q.SEARCH_TOURNAMENTS, search_param, season, per_page, offset)
+    count_row = await pool.fetchrow(q.COUNT_TOURNAMENTS, search_param, season)
+    total = count_row["total"]
+    return {
+        "results": [dict(r) for r in rows],
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": (total + per_page - 1) // per_page,
+    }
 
 
 @router.get("/tournaments/{tournament_id}")
