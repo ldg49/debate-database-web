@@ -30,7 +30,7 @@ CAREER_STATS = """
 SEASON_SUMMARY = """
     SELECT
         t.season,
-        SPLIT_PART(tm.team_name, ' ', 1) as school,
+        REGEXP_REPLACE(tm.team_name, '\s+\S+$', '') as school,
         string_agg(DISTINCT
             CASE WHEN d2.debater_id != $1
                  THEN TRIM(COALESCE(d2.first_name, '') || ' ' || COALESCE(d2.last_name, d2.debater_id))
@@ -56,7 +56,7 @@ SEASON_SUMMARY = """
     LEFT JOIN debater d2 ON td2.debater_id = d2.id
     LEFT JOIN round_debater_point rdp ON rdp.round_result_id = rr.id AND rdp.debater_id = d.id
     WHERE d.debater_id = $1 AND d.is_active IS NOT FALSE
-    GROUP BY t.season, SPLIT_PART(tm.team_name, ' ', 1)
+    GROUP BY t.season, REGEXP_REPLACE(tm.team_name, '\s+\S+$', '')
     ORDER BY MIN(t.start_date)
 """
 
@@ -64,7 +64,7 @@ PARTNER_HISTORY = """
     SELECT
         d2.debater_id as partner_code,
         TRIM(COALESCE(d2.first_name, '') || ' ' || COALESCE(d2.last_name, d2.debater_id)) as partner_name,
-        SPLIT_PART(tm.team_name, ' ', 1) as school,
+        REGEXP_REPLACE(tm.team_name, '\s+\S+$', '') as school,
         COUNT(*) FILTER (WHERE
             (rr.aff_team_id = tm.id AND rr.winner = 1) OR
             (rr.neg_team_id = tm.id AND rr.winner = 2)
@@ -84,7 +84,7 @@ PARTNER_HISTORY = """
     JOIN round r ON rr.round_id = r.id AND r.is_active IS NOT FALSE
     JOIN tournament t ON r.tournament_id = t.id AND tm.tournament_id = t.id
     WHERE d.debater_id = $1 AND d.is_active IS NOT FALSE
-    GROUP BY d2.debater_id, d2.first_name, d2.last_name, SPLIT_PART(tm.team_name, ' ', 1)
+    GROUP BY d2.debater_id, d2.first_name, d2.last_name, REGEXP_REPLACE(tm.team_name, '\s+\S+$', '')
     ORDER BY COUNT(*) DESC
 """
 
