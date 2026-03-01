@@ -105,7 +105,12 @@ async def ai_query(req: QueryRequest):
     try:
         pool = await get_pool()
         async with pool.acquire() as conn:
-            rows = await conn.fetch(f"{sql} LIMIT 100")
+            # Only add LIMIT if query doesn't already have one
+            if not re.search(r"\bLIMIT\b", sql, re.IGNORECASE):
+                exec_sql = f"{sql} LIMIT 100"
+            else:
+                exec_sql = sql
+            rows = await conn.fetch(exec_sql)
             results = [dict(row) for row in rows]
             # Convert non-serializable types
             for row in results:
