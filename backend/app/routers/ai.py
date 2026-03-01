@@ -56,10 +56,11 @@ To count wins for a debater at a school (e.g., "most wins for Northwestern"):
 
 To find a specific person: WHERE d.first_name ILIKE '%name%' OR d.last_name ILIKE '%name%'
 
-## Important Rules
+## CRITICAL Rules
+- NEVER use is_active = TRUE. Many records have is_active = NULL (which means active). Always use: is_active IS NOT FALSE
+- Exclude BYEs with: result_type IS DISTINCT FROM 'bye'
 - Elim round names stored in round_number: Finals, Semis, Quarters, Octas, Doubles, Triples, Runoff
 - Seasons span two academic years (season '2024' = Fall 2024 + Spring 2025)
-- Filter is_active = TRUE and result_type IS DISTINCT FROM 'bye' to exclude BYEs
 - For "most" or "best" questions, return TOP 20 (not just 1) unless user asks for exactly 1
 - Always use COUNT(DISTINCT rr.id) when counting wins/losses through joins to avoid duplicates
 
