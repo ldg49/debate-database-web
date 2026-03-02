@@ -63,6 +63,7 @@ LEFT JOIN sp_coverage sp ON sp.tournament_id = t.id
 LEFT JOIN debater_names dn ON dn.tournament_id = t.id
 LEFT JOIN known_issues ki ON ki.tournament_id = t.id
 WHERE t.is_active IS NOT FALSE
+  AND (t.data_gaps_reviewed IS NOT TRUE)
 ORDER BY t.start_date DESC, t.name
 """
 
@@ -142,6 +143,7 @@ LEFT JOIN sp_coverage sp ON sp.tournament_id = t.id
 LEFT JOIN debater_names dn ON dn.tournament_id = t.id
 LEFT JOIN known_issues ki ON ki.tournament_id = t.id
 WHERE t.is_active IS NOT FALSE
+  AND (t.data_gaps_reviewed IS NOT TRUE)
   AND t.season = $1
 ORDER BY t.start_date DESC, t.name
 """
