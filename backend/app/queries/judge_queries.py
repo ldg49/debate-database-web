@@ -101,7 +101,7 @@ JUDGE_PANEL_STATS = """
     )
     SELECT
         season,
-        COUNT(*) FILTER (WHERE panel_size > 1) as panel_decisions,
+        COUNT(*) FILTER (WHERE panel_size > 1 AND vote IS NOT NULL) as panel_decisions,
         COUNT(*) FILTER (WHERE panel_size > 1 AND vote = winner) as majority,
         COUNT(*) FILTER (WHERE panel_size > 1 AND vote != winner) as minority
     FROM vote_details
