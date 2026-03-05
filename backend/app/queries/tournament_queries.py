@@ -92,7 +92,9 @@ ELIM_RESULTS = """
         COALESCE(neg_tm.team_name, 'BYE') as neg_team,
         neg_tm.id as neg_team_id,
         (SELECT string_agg(
-             CASE WHEN rjv.vote != rr.winner THEN j.name || '*' ELSE j.name END,
+             CASE WHEN rr.winner = 0 THEN j.name || CASE WHEN rjv.vote = 1 THEN ' (A)' ELSE ' (N)' END
+                  WHEN rjv.vote != rr.winner THEN j.name || '*'
+                  ELSE j.name END,
              ', ')
          FROM round_judges_vote rjv JOIN judge j ON rjv.judge_id = j.id
          WHERE rjv.round_result_id = rr.id) as judges,
@@ -149,7 +151,9 @@ ROUND_RESULTS = """
          LEFT JOIN round_debater_point rdp ON rdp.round_result_id = rr.id AND rdp.debater_id = d.id
          WHERE td.team_id = rr.neg_team_id) as neg_debaters,
         (SELECT string_agg(
-             CASE WHEN rjv.vote != rr.winner THEN j.name || '*' ELSE j.name END,
+             CASE WHEN rr.winner = 0 THEN j.name || CASE WHEN rjv.vote = 1 THEN ' (A)' ELSE ' (N)' END
+                  WHEN rjv.vote != rr.winner THEN j.name || '*'
+                  ELSE j.name END,
              ', ')
          FROM round_judges_vote rjv JOIN judge j ON rjv.judge_id = j.id
          WHERE rjv.round_result_id = rr.id) as judge,
@@ -174,7 +178,9 @@ TEAM_ROUNDS = """
         CASE WHEN rr.aff_team_id = $1 THEN neg_tm.team_name ELSE aff_tm.team_name END as opponent,
         CASE WHEN rr.aff_team_id = $1 THEN neg_tm.id ELSE aff_tm.id END as opponent_id,
         (SELECT string_agg(
-             CASE WHEN rjv.vote != rr.winner THEN j.name || '*' ELSE j.name END,
+             CASE WHEN rr.winner = 0 THEN j.name || CASE WHEN rjv.vote = 1 THEN ' (A)' ELSE ' (N)' END
+                  WHEN rjv.vote != rr.winner THEN j.name || '*'
+                  ELSE j.name END,
              ', ')
          FROM round_judges_vote rjv JOIN judge j ON rjv.judge_id = j.id
          WHERE rjv.round_result_id = rr.id) as judge,

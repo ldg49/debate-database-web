@@ -181,7 +181,9 @@ TOURNAMENT_ROUNDS = """
         CASE WHEN rr.aff_team_id = tm.id THEN 'Aff' ELSE 'Neg' END as side,
         CASE WHEN rr.aff_team_id = tm.id THEN neg_tm.team_name ELSE aff_tm.team_name END as opponent,
         (SELECT string_agg(
-             CASE WHEN rjv.vote != rr.winner THEN j.name || '*' ELSE j.name END,
+             CASE WHEN rr.winner = 0 THEN j.name || CASE WHEN rjv.vote = 1 THEN ' (A)' ELSE ' (N)' END
+                  WHEN rjv.vote != rr.winner THEN j.name || '*'
+                  ELSE j.name END,
              ', ')
          FROM round_judges_vote rjv JOIN judge j ON rjv.judge_id = j.id
          WHERE rjv.round_result_id = rr.id) as judge,
