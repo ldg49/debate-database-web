@@ -60,7 +60,7 @@ JUDGE_SEASON_SUMMARY = """
 JUDGE_TOURNAMENT_LIST = """
     SELECT
         t.id as tournament_id,
-        t.name as tournament_name,
+        COALESCE(t.display_name, t.name) as tournament_name,
         t.season,
         t.start_date,
         COUNT(rjv.id) as decisions,
@@ -74,8 +74,39 @@ JUDGE_TOURNAMENT_LIST = """
     JOIN tournament t ON r.tournament_id = t.id
     WHERE j.is_active IS NOT FALSE
       AND j.name = $1
-    GROUP BY t.id, t.name, t.season, t.start_date
+    GROUP BY t.id, t.name, t.display_name, t.season, t.start_date
     ORDER BY t.start_date DESC
+"""
+
+JUDGE_PANEL_STATS = """
+    WITH vote_details AS (
+        SELECT
+            rjv.vote,
+            rr.winner,
+            rr.id as result_id,
+            t.season,
+            (SELECT COUNT(*) FROM round_judges_vote rjv2
+             WHERE rjv2.round_result_id = rr.id
+             AND rjv2.is_active IS NOT FALSE) as panel_size
+        FROM judge j
+        JOIN round_judges_vote rjv ON rjv.judge_id = j.id AND rjv.is_active IS NOT FALSE
+        JOIN round_result rr ON rjv.round_result_id = rr.id AND rr.is_active IS NOT FALSE
+        JOIN round r ON rr.round_id = r.id AND r.is_active IS NOT FALSE
+        JOIN tournament t ON r.tournament_id = t.id
+        WHERE j.is_active IS NOT FALSE
+          AND j.name = $1
+          AND rr.winner > 0
+          AND rr.result_type IS DISTINCT FROM 'bye'
+          AND rr.result_type IS DISTINCT FROM 'forfeit'
+    )
+    SELECT
+        season,
+        COUNT(*) FILTER (WHERE panel_size > 1) as panel_decisions,
+        COUNT(*) FILTER (WHERE panel_size > 1 AND vote = winner) as majority,
+        COUNT(*) FILTER (WHERE panel_size > 1 AND vote != winner) as minority
+    FROM vote_details
+    GROUP BY season
+    ORDER BY season
 """
 
 JUDGE_TOURNAMENT_ROUNDS = """
@@ -90,12 +121,13 @@ JUDGE_TOURNAMENT_ROUNDS = """
             WHEN rr.result_type = 'bye' THEN 'BYE'
             WHEN rr.result_type = 'forfeit' THEN 'FFT'
             WHEN rr.winner = -1 THEN 'CLOSEOUT'
+            WHEN rr.winner = 0 THEN 'TIE'
             WHEN rr.winner = 1 THEN 'AFF'
             WHEN rr.winner = 2 THEN 'NEG'
             ELSE ''
         END as decision,
         rr.ballot_count,
-        CASE WHEN rjv.vote != rr.winner AND rr.winner > 0 THEN true ELSE false END as dissent
+        CASE WHEN rr.winner > 0 AND rjv.vote != rr.winner THEN true ELSE false END as dissent
     FROM judge j
     JOIN round_judges_vote rjv ON rjv.judge_id = j.id AND rjv.is_active IS NOT FALSE
     JOIN round_result rr ON rjv.round_result_id = rr.id AND rr.is_active IS NOT FALSE

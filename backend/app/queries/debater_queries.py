@@ -1,19 +1,29 @@
 SEARCH_DEBATERS = """
-    SELECT debater_code, first_name, last_name, total_wins, total_losses,
-           win_percentage, avg_speaker_points, tournaments_attended
-    FROM debater_career_stats
-    WHERE total_wins + total_losses > 0
-      AND (LOWER(last_name) LIKE LOWER($1)
-           OR LOWER(first_name) LIKE LOWER($1)
-           OR LOWER(debater_code) LIKE LOWER($1)
-           OR LOWER(first_name || ' ' || last_name) LIKE LOWER($1)
-           OR LOWER(last_name || ', ' || first_name) LIKE LOWER($1))
-    ORDER BY last_name, first_name
+    SELECT dcs.debater_code, dcs.first_name, dcs.last_name, dcs.total_wins, dcs.total_losses,
+           COALESCE(dcs.total_ties, 0) as total_ties, dcs.win_percentage,
+           (SELECT ROUND(AVG(rdp.points)::numeric, 1)
+            FROM round_debater_point rdp
+            JOIN debater d2 ON rdp.debater_id = d2.id
+            JOIN round_result rr ON rdp.round_result_id = rr.id AND rr.is_active IS NOT FALSE
+            JOIN round r ON rr.round_id = r.id AND r.is_active IS NOT FALSE
+            JOIN tournament t ON r.tournament_id = t.id AND t.scoring_scale = '30'
+            WHERE d2.debater_id = dcs.debater_code AND rdp.points IS NOT NULL
+           ) as avg_speaker_points,
+           dcs.tournaments_attended
+    FROM debater_career_stats dcs
+    WHERE dcs.total_wins + dcs.total_losses > 0
+      AND (LOWER(dcs.last_name) LIKE LOWER($1)
+           OR LOWER(dcs.first_name) LIKE LOWER($1)
+           OR LOWER(dcs.debater_code) LIKE LOWER($1)
+           OR LOWER(dcs.first_name || ' ' || dcs.last_name) LIKE LOWER($1)
+           OR LOWER(dcs.last_name || ', ' || dcs.first_name) LIKE LOWER($1))
+    ORDER BY dcs.last_name, dcs.first_name
     LIMIT 50
 """
 
 ALL_DEBATERS = """
     SELECT debater_code, first_name, last_name, total_wins, total_losses,
+           COALESCE(total_ties, 0) as total_ties,
            win_percentage, avg_speaker_points, tournaments_attended
     FROM debater_career_stats
     WHERE total_wins + total_losses > 0
@@ -21,10 +31,19 @@ ALL_DEBATERS = """
 """
 
 CAREER_STATS = """
-    SELECT debater_code, first_name, last_name, total_wins, total_losses,
-           win_percentage, avg_speaker_points, tournaments_attended
-    FROM debater_career_stats
-    WHERE debater_code = $1
+    SELECT dcs.debater_code, dcs.first_name, dcs.last_name, dcs.total_wins, dcs.total_losses,
+           COALESCE(dcs.total_ties, 0) as total_ties, dcs.win_percentage,
+           (SELECT ROUND(AVG(rdp.points)::numeric, 1)
+            FROM round_debater_point rdp
+            JOIN debater d2 ON rdp.debater_id = d2.id
+            JOIN round_result rr ON rdp.round_result_id = rr.id AND rr.is_active IS NOT FALSE
+            JOIN round r ON rr.round_id = r.id AND r.is_active IS NOT FALSE
+            JOIN tournament t ON r.tournament_id = t.id AND t.scoring_scale = '30'
+            WHERE d2.debater_id = dcs.debater_code AND rdp.points IS NOT NULL
+           ) as avg_speaker_points,
+           dcs.tournaments_attended
+    FROM debater_career_stats dcs
+    WHERE dcs.debater_code = $1
 """
 
 SEASON_SUMMARY = """
@@ -44,7 +63,10 @@ SEASON_SUMMARY = """
             (rr.aff_team_id = tm.id AND rr.winner = 2) OR
             (rr.neg_team_id = tm.id AND rr.winner = 1)
         ) as losses,
-        ROUND(AVG(rdp.points)::numeric, 1) as avg_sp
+        COUNT(DISTINCT rr.id) FILTER (WHERE
+            (rr.aff_team_id = tm.id OR rr.neg_team_id = tm.id) AND rr.winner = 0
+        ) as ties,
+        ROUND(AVG(rdp.points) FILTER (WHERE t.scoring_scale = '30')::numeric, 1) as avg_sp
     FROM debater d
     JOIN team_debater td ON d.id = td.debater_id
     JOIN team tm ON td.team_id = tm.id
@@ -73,6 +95,7 @@ PARTNER_HISTORY = """
             (rr.aff_team_id = tm.id AND rr.winner = 2) OR
             (rr.neg_team_id = tm.id AND rr.winner = 1)
         ) as losses,
+        COUNT(*) FILTER (WHERE rr.winner = 0) as ties,
         COUNT(DISTINCT t.id) as tournaments
     FROM debater d
     JOIN team_debater td ON d.id = td.debater_id
@@ -91,7 +114,7 @@ PARTNER_HISTORY = """
 TOURNAMENT_LIST = """
     SELECT
         t.id as tournament_id,
-        t.name as tournament_name,
+        COALESCE(t.display_name, t.name) as tournament_name,
         t.season,
         t.start_date,
         tm.team_name,
@@ -105,6 +128,10 @@ TOURNAMENT_LIST = """
             (rr.aff_team_id = tm.id AND rr.winner = 2) OR
             (rr.neg_team_id = tm.id AND rr.winner = 1))
         ) as losses,
+        COUNT(DISTINCT rr.id) FILTER (WHERE
+            r.round_type = 'prelim' AND rr.winner = 0 AND
+            (rr.aff_team_id = tm.id OR rr.neg_team_id = tm.id)
+        ) as ties,
         ROUND(AVG(rdp.points)::numeric, 1) as avg_sp,
         (SELECT CASE
             WHEN sub_r.round_number = 'Finals' AND (
@@ -162,6 +189,7 @@ TOURNAMENT_ROUNDS = """
             WHEN rr.result_type = 'bye' THEN 'BYE'
             WHEN rr.result_type = 'forfeit' THEN 'FFT'
             WHEN rr.winner = -1 THEN 'BYE'
+            WHEN rr.winner = 0 THEN 'T'
             WHEN (rr.aff_team_id = tm.id AND rr.winner = 1) OR (rr.neg_team_id = tm.id AND rr.winner = 2) THEN 'W'
             ELSE 'L'
         END as result,

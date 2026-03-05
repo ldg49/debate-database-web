@@ -10,10 +10,12 @@ export function DebaterHeader({
 }) {
   const schools = [...new Set(seasons.map((s) => s.school))];
   const seasonYears = seasons.map((s) => s.season);
-  const firstYear = seasonYears.length > 0 ? seasonYears[0] : "";
-  const lastYear =
+  const firstSeason = seasonYears.length > 0 ? seasonYears[0] : "";
+  const lastSeason =
     seasonYears.length > 0 ? seasonYears[seasonYears.length - 1] : "";
-  const yearRange = firstYear === lastYear ? firstYear : `${firstYear}-${lastYear}`;
+  const startYear = firstSeason.split("-")[0];
+  const endYear = lastSeason.split("-").pop();
+  const yearRange = firstSeason === lastSeason ? firstSeason : `${startYear}-${endYear}`;
 
   return (
     <div className="mb-4">
@@ -28,7 +30,7 @@ export function DebaterHeader({
         {schools.join(", ")} | {yearRange}
       </div>
       <div className="text-sm mt-1 font-semibold">
-        {formatRecord(career.total_wins, career.total_losses)} (
+        {formatRecord(career.total_wins, career.total_losses, career.total_ties)} (
         {winPct(career.total_wins, career.total_losses)}) |{" "}
         {formatSP(career.avg_speaker_points)} avg SP |{" "}
         {career.tournaments_attended} tournaments

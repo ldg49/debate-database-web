@@ -6,10 +6,10 @@ SEASONS = """
 """
 
 SEARCH_TOURNAMENTS = """
-    SELECT id, name, season, start_date
+    SELECT id, name, display_name, host_school, tournament_type, season, start_date
     FROM tournament
     WHERE is_active IS NOT FALSE
-      AND ($1::text IS NULL OR LOWER(name) LIKE LOWER($1))
+      AND ($1::text IS NULL OR LOWER(name) LIKE LOWER($1) OR LOWER(display_name) LIKE LOWER($1))
       AND ($2::text IS NULL OR season = $2)
     ORDER BY start_date DESC NULLS LAST
     LIMIT $3 OFFSET $4
@@ -19,12 +19,12 @@ COUNT_TOURNAMENTS = """
     SELECT COUNT(*) as total
     FROM tournament
     WHERE is_active IS NOT FALSE
-      AND ($1::text IS NULL OR LOWER(name) LIKE LOWER($1))
+      AND ($1::text IS NULL OR LOWER(name) LIKE LOWER($1) OR LOWER(display_name) LIKE LOWER($1))
       AND ($2::text IS NULL OR season = $2)
 """
 
 TOURNAMENT_DETAIL = """
-    SELECT id, name, season, start_date, end_date
+    SELECT id, name, display_name, host_school, tournament_type, season, start_date, end_date
     FROM tournament
     WHERE id = $1 AND is_active IS NOT FALSE
 """
@@ -51,6 +51,11 @@ STANDINGS = """
          WHERE ((rr2.aff_team_id = t.id AND rr2.winner = 2) OR
                 (rr2.neg_team_id = t.id AND rr2.winner = 1))
            AND r2.round_type = 'prelim' AND rr2.is_active IS NOT FALSE) as prelim_losses,
+        (SELECT COUNT(*) FROM round_result rr2
+         JOIN round r2 ON rr2.round_id = r2.id
+         WHERE (rr2.aff_team_id = t.id OR rr2.neg_team_id = t.id)
+           AND rr2.winner = 0
+           AND r2.round_type = 'prelim' AND rr2.is_active IS NOT FALSE) as prelim_ties,
         (SELECT ROUND(AVG(rdp.points)::numeric, 1)
          FROM round_debater_point rdp
          JOIN debater d ON rdp.debater_id = d.id
@@ -94,6 +99,7 @@ ELIM_RESULTS = """
         CASE WHEN rr.result_type = 'bye' THEN 'BYE'
              WHEN rr.result_type = 'closeout' THEN 'CLOSEOUT'
              WHEN rr.result_type = 'forfeit' THEN 'FORFEIT'
+             WHEN rr.winner = 0 THEN 'TIE ' || COALESCE(rr.ballot_count, '')
              WHEN rr.winner = 1 THEN 'AFF ' || COALESCE(rr.ballot_count, '')
              WHEN rr.winner = 2 THEN 'NEG ' || COALESCE(rr.ballot_count, '')
              WHEN rr.winner = -1 THEN COALESCE(rr.ballot_count, '')
@@ -147,7 +153,8 @@ ROUND_RESULTS = """
              ', ')
          FROM round_judges_vote rjv JOIN judge j ON rjv.judge_id = j.id
          WHERE rjv.round_result_id = rr.id) as judge,
-        CASE WHEN rr.winner = 1 THEN 'AFF'
+        CASE WHEN rr.winner = 0 THEN 'TIE'
+             WHEN rr.winner = 1 THEN 'AFF'
              WHEN rr.winner = 2 THEN 'NEG'
              WHEN rr.winner = -1 THEN 'BYE'
         END as decision
@@ -175,6 +182,7 @@ TEAM_ROUNDS = """
             WHEN rr.result_type = 'bye' THEN 'BYE'
             WHEN rr.result_type = 'forfeit' THEN 'FFT'
             WHEN rr.winner = -1 THEN 'BYE'
+            WHEN rr.winner = 0 THEN 'T'
             WHEN (rr.aff_team_id = $1 AND rr.winner = 1) OR (rr.neg_team_id = $1 AND rr.winner = 2) THEN
                 CASE WHEN r.round_type = 'elim' AND rr.ballot_count IS NOT NULL AND rr.ballot_count != ''
                      THEN 'W (' || rr.ballot_count || ')'

@@ -19,6 +19,7 @@ export function CareerSummary({
             <th>Partners</th>
             <th className="text-right">W</th>
             <th className="text-right">L</th>
+            <th className="text-right">T</th>
             <th className="text-right">Pct</th>
             <th className="text-right">SP</th>
           </tr>
@@ -31,6 +32,7 @@ export function CareerSummary({
               <td>{s.partners || "-"}</td>
               <td className="num">{s.wins}</td>
               <td className="num">{s.losses}</td>
+              <td className="num">{s.ties || 0}</td>
               <td className="num">{winPct(s.wins, s.losses)}</td>
               <td className="num">{formatSP(s.avg_sp)}</td>
             </tr>
@@ -41,6 +43,7 @@ export function CareerSummary({
             <td></td>
             <td className="num">{career.total_wins}</td>
             <td className="num">{career.total_losses}</td>
+            <td className="num">{seasons.reduce((sum, s) => sum + (s.ties || 0), 0)}</td>
             <td className="num">
               {winPct(career.total_wins, career.total_losses)}
             </td>

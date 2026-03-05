@@ -18,6 +18,7 @@ export function StandingsTable({
           <th>Debaters</th>
           <th className="text-right">W</th>
           <th className="text-right">L</th>
+          <th className="text-right">T</th>
           <th className="text-right">SP</th>
         </tr>
       </thead>
@@ -53,6 +54,7 @@ export function StandingsTable({
             </td>
             <td className="num">{s.prelim_wins}</td>
             <td className="num">{s.prelim_losses}</td>
+            <td className="num">{s.prelim_ties || 0}</td>
             <td className="num">{formatSP(s.avg_sp)}</td>
           </tr>
         ))}

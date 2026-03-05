@@ -9,6 +9,7 @@ import { fetchApiClient } from "@/lib/api";
 function resultClass(result: string) {
   if (result === "W") return "result-w";
   if (result === "L") return "result-l";
+  if (result === "T") return "result-tie";
   if (result === "BYE" || result === "FFT") return "result-bye";
   return "";
 }
@@ -40,7 +41,7 @@ function TournamentRow({
     setOpen(!open);
   };
 
-  const record = formatRecord(entry.wins, entry.losses);
+  const record = formatRecord(entry.wins, entry.losses, entry.ties);
   const elimTag = entry.elim_result ? `, ${entry.elim_result}` : "";
   const sp = entry.avg_sp ? ` ${formatSP(entry.avg_sp)}` : "";
 

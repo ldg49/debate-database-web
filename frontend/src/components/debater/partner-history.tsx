@@ -15,6 +15,7 @@ export function PartnerHistory({ partners }: { partners: PartnerRecord[] }) {
             <th>School</th>
             <th className="text-right">W</th>
             <th className="text-right">L</th>
+            <th className="text-right">T</th>
             <th className="text-right">Pct</th>
             <th className="text-right">Tourns</th>
           </tr>
@@ -28,6 +29,7 @@ export function PartnerHistory({ partners }: { partners: PartnerRecord[] }) {
               <td>{p.school}</td>
               <td className="num">{p.wins}</td>
               <td className="num">{p.losses}</td>
+              <td className="num">{p.ties || 0}</td>
               <td className="num">{winPct(p.wins, p.losses)}</td>
               <td className="num">{p.tournaments}</td>
             </tr>

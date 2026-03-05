@@ -74,6 +74,8 @@ export function RoundResults({ tournamentId }: { tournamentId: number }) {
                         ? "result-w"
                         : r.decision === "NEG"
                         ? "result-l"
+                        : r.decision === "TIE"
+                        ? "result-tie"
                         : ""
                     }
                   >

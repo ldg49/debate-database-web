@@ -70,6 +70,8 @@ export function ElimResults({
                           ? "result-w"
                           : d.decision?.includes("NEG")
                           ? "result-l"
+                          : d.decision?.includes("TIE")
+                          ? "result-tie"
                           : ""
                       }
                     >

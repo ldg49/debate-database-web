@@ -35,12 +35,13 @@ function TeamDetail({
     (r) => r.result.startsWith("W") || r.result === "BYE"
   ).length;
   const losses = rounds.filter((r) => r.result.startsWith("L")).length;
+  const ties = rounds.filter((r) => r.result === "T").length;
 
   return (
     <div className="mb-4 p-3 border border-gray-200 rounded bg-gray-50">
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-sm font-bold" style={{ color: "var(--sr-navy)" }}>
-          {teamName} ({wins}-{losses})
+          {teamName} ({wins}-{losses}{ties > 0 ? `-${ties}` : ""})
         </h3>
         <button
           onClick={onClose}
@@ -76,6 +77,8 @@ function TeamDetail({
                         ? "result-w"
                         : r.result.startsWith("L")
                         ? "result-l"
+                        : r.result === "T"
+                        ? "result-tie"
                         : "result-bye"
                     }
                   >
@@ -142,15 +145,16 @@ export default function TournamentPage() {
     <div>
       <div className="breadcrumb">
         <a href="/">Home</a> &gt; <a href="/tournaments">Tournaments</a> &gt;{" "}
-        {tournament.name}
+        {tournament.display_name || tournament.name}
       </div>
       <h1
         className="text-xl font-bold mt-1 mb-1"
         style={{ color: "var(--sr-navy)" }}
       >
-        {tournament.name}
+        {tournament.display_name || tournament.name}
       </h1>
       <div className="text-xs text-gray-500 mb-3">
+        {tournament.host_school && `${tournament.host_school} | `}
         {tournament.season} |{" "}
         {tournament.start_date
           ? new Date(tournament.start_date).toLocaleDateString()

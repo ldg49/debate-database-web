@@ -192,4 +192,53 @@ a.sr-link:hover {
 /* Win/loss colors */
 .result-w { color: #2d6a2e; font-weight: 600; }
 .result-l { color: #a31515; font-weight: 600; }
+.result-tie { color: #b8860b; font-weight: 600; }
 .result-bye { color: #666; }
+
+/* Data gap badges */
+.gap-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-right: 4px;
+  white-space: nowrap;
+}
+
+.gap-badge.severity-high {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.gap-badge.severity-medium {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.gap-badge.severity-low {
+  background: #d1ecf1;
+  color: #0c5460;
+}
+
+/* Gap filter buttons */
+.gap-filter-btn {
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  background: #fff;
+  cursor: pointer;
+  color: #333;
+}
+
+.gap-filter-btn:hover {
+  background: #f2f2f2;
+}
+
+.gap-filter-btn.active {
+  background: var(--sr-navy);
+  color: #fff;
+  border-color: var(--sr-navy);
+}
