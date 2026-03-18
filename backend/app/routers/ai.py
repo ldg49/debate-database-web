@@ -43,6 +43,38 @@ round_debater_point(round_result_id FK, debater_id FK, points, speaking_order, p
 round_judges_vote(id, round_result_id FK, judge_id FK, vote, is_active)
   - vote: 1=voted Aff, 2=voted Neg
 tournament_placement(id, tournament_id FK, team_id FK, place)
+  - VERY SPARSE: only ~6 rows total. Do NOT use this for NDT/tournament winners.
+  - To find who WON a tournament, look for the team that won the Finals round instead:
+    SELECT tm.team_name, t.name AS tournament, t.season
+    FROM round r JOIN round_result rr ON rr.round_id = r.id
+    JOIN tournament t ON r.tournament_id = t.id
+    JOIN team tm ON (CASE WHEN rr.winner = 1 THEN rr.aff_team_id ELSE rr.neg_team_id END) = tm.id
+    WHERE r.round_number = 'Finals' AND rr.winner IN (1, 2)
+    AND t.name ILIKE '%National Debate Tournament%'
+
+## CRITICAL: Teams are per-tournament
+Each team row (t.id) belongs to ONE tournament. "Kansas LS" at Georgetown is a DIFFERENT row than "Kansas LS" at Shirley.
+- To aggregate a team across a season: GROUP BY t.team_name (NOT t.id)
+- To aggregate a team across all time: GROUP BY t.team_name
+- t.id is only useful for within-a-single-tournament queries
+- Same applies to debater.id and judge.id — they are per-tournament rows
+
+Example - best teams this season by win rate (min 20 rounds):
+  SELECT t.team_name,
+    COUNT(DISTINCT CASE WHEN (rr.aff_team_id = t.id AND rr.winner = 1)
+      OR (rr.neg_team_id = t.id AND rr.winner = 2) THEN rr.id END) as wins,
+    COUNT(DISTINCT rr.id) as total_rounds,
+    ROUND((COUNT(DISTINCT CASE WHEN (rr.aff_team_id = t.id AND rr.winner = 1)
+      OR (rr.neg_team_id = t.id AND rr.winner = 2) THEN rr.id END)
+      * 100.0 / NULLIF(COUNT(DISTINCT rr.id), 0))::numeric, 1) as win_pct
+  FROM team t
+  JOIN tournament tn ON t.tournament_id = tn.id
+  JOIN round_result rr ON (rr.aff_team_id = t.id OR rr.neg_team_id = t.id)
+    AND rr.is_active IS NOT FALSE AND rr.result_type IS DISTINCT FROM 'bye'
+  WHERE tn.season = '2025-2026'
+  GROUP BY t.team_name
+  HAVING COUNT(DISTINCT rr.id) >= 20
+  ORDER BY win_pct DESC LIMIT 20
 
 ## Pre-aggregated Views (USE THESE FIRST when possible — much faster than joining raw tables)
 
@@ -163,6 +195,12 @@ Team names use standardized school names. Many schools have similar names that M
 - "Cal State Fullerton" / "Chico State" / "Cal Poly SLO" are NOT "Berkeley". Berkeley = team_name ~ '^Berkeley [A-Z]'
 - "USC" = University of Southern California. Use: team_name LIKE 'USC %'
 - "UMKC" = Missouri-Kansas City. "UCO" = Central Oklahoma. "UNLV" = Nevada Las Vegas.
+- "Mary Washington" or "UMW" = team_name LIKE 'Mary Washington %'
+- "Colorado" or "CU Boulder" = team_name ~ '^Colorado [A-Z]' (NOT "Southern Colorado")
+- "Cal State Long Beach" or "CSULB" or "Long Beach" = team_name LIKE 'Cal State Long Beach %'
+- "Kansas" = University of Kansas. Use: team_name ~ '^Kansas [A-Z]' (NOT LIKE 'Kansas %' which matches Kansas State, Kansas City)
+- "Kansas State" or "K-State" = team_name LIKE 'Kansas State %'
+- "Emporia" or "Emporia State" = team_name LIKE 'Emporia State %' (or 'Emporia %')
 
 When a user says a school name, use the MOST SPECIFIC match. If they say "Georgia", they mean UGA, not Georgia State or West Georgia.
 Use regex matching (team_name ~ '^SchoolName [A-Z]') to avoid matching longer school names that start with the same word.
@@ -211,9 +249,50 @@ Generate ONLY a single SELECT query (or WITH/SELECT CTE). No explanations, no ma
 """
 
 DISALLOWED_PATTERN = re.compile(
-    r"\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|GRANT|REVOKE|COPY|EXECUTE)\b|\bDO\s",
+    r"\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|GRANT|REVOKE|COPY|EXECUTE)\b"
+    r"|\bDO\s"
+    r"|\bpg_catalog\b|\binformation_schema\b"
+    r"|\bpg_tables\b|\bpg_views\b|\bpg_class\b|\bpg_namespace\b|\bpg_roles\b|\bpg_user\b"
+    r"|\bcurrent_user\b|\bsession_user\b",
     re.IGNORECASE,
 )
+
+# Server-side table allowlist — only these tables/views may appear in AI-generated queries.
+# Any query referencing other tables (users, ai_query_log, alembic_version,
+# information_schema, pg_catalog, etc.) is rejected BEFORE execution.
+ALLOWED_TABLES = {
+    "tournament", "round", "team", "debater", "judge",
+    "team_debater", "round_result", "round_debater_point",
+    "round_judges_vote", "tournament_placement",
+    # Pre-aggregated views
+    "debater_career_stats", "team_tournament_stats",
+}
+
+# Pattern to extract table/view names from SQL — matches FROM/JOIN clauses
+# Captures: FROM tablename, JOIN tablename, FROM schema.tablename
+_TABLE_REF_PATTERN = re.compile(
+    r"(?:FROM|JOIN)\s+"
+    r"(?:LATERAL\s+)?"           # optional LATERAL
+    r"(?:(\w+)\.)?(\w+)"         # optional schema.table
+    r"(?:\s|$|,|\()",
+    re.IGNORECASE,
+)
+
+
+def validate_table_references(sql: str) -> str | None:
+    """Check that all table references are in ALLOWED_TABLES.
+
+    Returns None if valid, or an error message if a disallowed table is found.
+    """
+    for match in _TABLE_REF_PATTERN.finditer(sql):
+        schema = match.group(1)
+        table = match.group(2).lower()
+        # Block any schema-qualified references (information_schema.X, pg_catalog.X, etc.)
+        if schema and schema.lower() not in ("public",):
+            return f"Access to {schema}.{table} is not allowed"
+        if table not in ALLOWED_TABLES:
+            return f"Access to table '{table}' is not allowed"
+    return None
 
 
 def fix_round_numeric(sql):
@@ -304,7 +383,7 @@ async def ai_query(request: Request, req: QueryRequest):
         client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
         message = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=1024,
+            max_tokens=4096,
             system=SCHEMA_CONTEXT,
             messages=[{"role": "user", "content": question}],
         )
@@ -320,6 +399,30 @@ async def ai_query(request: Request, req: QueryRequest):
         sql = re.sub(r"\s*```$", "", sql)
     sql = sql.strip().rstrip(";")
 
+    # Strip thinking text — model sometimes outputs "Wait..." or "Hmm..." before/after SQL
+    # Find the actual SQL (starts with SELECT or WITH)
+    sql_match = re.search(r"(?:^|\n)\s*((?:WITH|SELECT)\b.+)", sql, re.IGNORECASE | re.DOTALL)
+    if sql_match:
+        sql = sql_match.group(1).strip()
+    # Also strip trailing non-SQL text after the query ends
+    # Look for lines that start with plain English after the query body
+    sql = re.split(r"\n\s*(?:Wait|Hmm|Note|Actually|Let me|I |The |This )\b", sql)[0].strip()
+    sql = sql.rstrip(";")
+
+    # Auto-fix: debater_career_stats.debater_id → debater_career_stats.debater_code
+    sql = re.sub(
+        r"\bdebater_career_stats\.debater_id\b",
+        "debater_career_stats.debater_code",
+        sql,
+    )
+    # Also fix bare "debater_id" when selecting FROM debater_career_stats
+    # (e.g., "SELECT debater_id, first_name..." from the view)
+    # Only apply when query uses debater_career_stats but NOT the raw debater table
+    if "debater_career_stats" in sql.lower() and not re.search(
+        r"\b(?:FROM|JOIN)\s+debater\s", sql, re.IGNORECASE
+    ):
+        sql = re.sub(r"(?<!\.)(?<!\w)debater_id(?!\w)", "debater_code", sql)
+
     # Safety: only allow SELECT (including CTEs that start with WITH)
     sql_upper = sql.upper().lstrip()
     if not (sql_upper.startswith("SELECT") or sql_upper.startswith("WITH")):
@@ -332,6 +435,12 @@ async def ai_query(request: Request, req: QueryRequest):
     if DISALLOWED_PATTERN.search(sql):
         await log_query(question, sql, False, "Query contains disallowed operations", None)
         return QueryResponse(sql=sql, error="Query contains disallowed operations")
+
+    # Server-side table allowlist — reject queries touching non-debate tables
+    table_error = validate_table_references(sql)
+    if table_error:
+        await log_query(question, sql, False, table_error, None)
+        return QueryResponse(sql=sql, error="Query references unauthorized tables")
 
     # Execute
     try:
