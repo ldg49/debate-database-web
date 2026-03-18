@@ -1,15 +1,21 @@
 from fastapi import APIRouter, Query
 from ..database import get_pool
 from ..queries import tournament_queries as q
+from ..cache import response_cache
 
 router = APIRouter(tags=["tournaments"])
 
 
 @router.get("/tournaments/seasons")
 async def get_seasons():
+    cache_key = "tournaments:seasons"
+    if cache_key in response_cache:
+        return response_cache[cache_key]
     pool = await get_pool()
     rows = await pool.fetch(q.SEASONS)
-    return [r["season"] for r in rows]
+    result = [r["season"] for r in rows]
+    response_cache[cache_key] = result
+    return result
 
 
 @router.get("/tournaments")
@@ -36,32 +42,52 @@ async def search_tournaments(
 
 @router.get("/tournaments/{tournament_id}")
 async def get_tournament(tournament_id: int):
+    cache_key = f"tournaments:{tournament_id}"
+    if cache_key in response_cache:
+        return response_cache[cache_key]
     pool = await get_pool()
     row = await pool.fetchrow(q.TOURNAMENT_DETAIL, tournament_id)
     if not row:
         return {"error": "Tournament not found"}
-    return dict(row)
+    result = dict(row)
+    response_cache[cache_key] = result
+    return result
 
 
 @router.get("/tournaments/{tournament_id}/standings")
 async def get_standings(tournament_id: int):
+    cache_key = f"tournaments:{tournament_id}:standings"
+    if cache_key in response_cache:
+        return response_cache[cache_key]
     pool = await get_pool()
     rows = await pool.fetch(q.STANDINGS, tournament_id)
-    return [dict(r) for r in rows]
+    result = [dict(r) for r in rows]
+    response_cache[cache_key] = result
+    return result
 
 
 @router.get("/tournaments/{tournament_id}/elims")
 async def get_elims(tournament_id: int):
+    cache_key = f"tournaments:{tournament_id}:elims"
+    if cache_key in response_cache:
+        return response_cache[cache_key]
     pool = await get_pool()
     rows = await pool.fetch(q.ELIM_RESULTS, tournament_id)
-    return [dict(r) for r in rows]
+    result = [dict(r) for r in rows]
+    response_cache[cache_key] = result
+    return result
 
 
 @router.get("/tournaments/{tournament_id}/rounds")
 async def get_rounds(tournament_id: int):
+    cache_key = f"tournaments:{tournament_id}:rounds"
+    if cache_key in response_cache:
+        return response_cache[cache_key]
     pool = await get_pool()
     rows = await pool.fetch(q.ROUND_LIST, tournament_id)
-    return [dict(r) for r in rows]
+    result = [dict(r) for r in rows]
+    response_cache[cache_key] = result
+    return result
 
 
 @router.get("/tournaments/{tournament_id}/rounds/{round_number}")

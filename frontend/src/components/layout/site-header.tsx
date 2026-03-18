@@ -8,7 +8,7 @@ export function SiteHeader() {
           href="/"
           className="text-white font-bold text-sm tracking-wide no-underline"
         >
-          College Policy Debate Database
+          College Debate Results
         </Link>
         <nav className="flex gap-6">
           {[
@@ -16,7 +16,8 @@ export function SiteHeader() {
             { href: "/debaters", label: "Debaters" },
             { href: "/tournaments", label: "Tournaments" },
             { href: "/judges", label: "Judges" },
-            { href: "/ask", label: "Ask AI" },
+            { href: "/data-gaps", label: "Data Gaps" },
+            { href: "/ask", label: "Ask the Database" },
           ].map((link) => (
             <Link
               key={link.href}

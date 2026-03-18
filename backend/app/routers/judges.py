@@ -30,6 +30,19 @@ async def get_judge_seasons(name: str):
     return [dict(r) for r in rows]
 
 
+@router.get("/judges/{name}/panel-stats")
+async def get_judge_panel_stats(name: str):
+    pool = await get_pool()
+    rows = await pool.fetch(q.JUDGE_PANEL_STATS, name)
+    seasons = [dict(r) for r in rows]
+    career = {"panel_decisions": 0, "majority": 0, "minority": 0}
+    for s in seasons:
+        career["panel_decisions"] += s["panel_decisions"]
+        career["majority"] += s["majority"]
+        career["minority"] += s["minority"]
+    return {"career": career, "seasons": seasons}
+
+
 @router.get("/judges/{name}/tournaments")
 async def get_judge_tournaments(name: str):
     pool = await get_pool()

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Query
 from ..database import get_pool
 from ..queries import debater_queries as q
+from ..cache import response_cache
 
 router = APIRouter(tags=["debaters"])
 
@@ -17,11 +18,16 @@ async def search_debaters(search: str = Query("", alias="q")):
 
 @router.get("/debaters/{code}")
 async def get_debater(code: str):
+    cache_key = f"debaters:{code}"
+    if cache_key in response_cache:
+        return response_cache[cache_key]
     pool = await get_pool()
     row = await pool.fetchrow(q.CAREER_STATS, code)
     if not row:
         return {"error": "Debater not found"}
-    return dict(row)
+    result = dict(row)
+    response_cache[cache_key] = result
+    return result
 
 
 @router.get("/debaters/{code}/season-summary")

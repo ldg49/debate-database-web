@@ -7,6 +7,7 @@ import type {
   JudgeSeasonSummary,
   JudgeTournamentEntry,
   JudgeRound,
+  JudgePanelStats,
 } from "@/lib/types";
 import { fetchApiClient } from "@/lib/api";
 import { TournamentLink } from "@/components/common/tournament-link";
@@ -47,7 +48,7 @@ function TournamentRow({ entry, judgeName }: { entry: JudgeTournamentEntry; judg
           {entry.tournament_name}
         </TournamentLink>
         <span className="text-gray-500">
-          &mdash; {entry.decisions} decisions ({affPct(entry.aff_votes, entry.decisions)} Aff)
+          &mdash; {entry.decisions} decisions ({affPct(entry.aff_votes, entry.aff_votes + entry.neg_votes)} Aff)
           {entry.elim_decisions > 0 && `, ${entry.elim_decisions} elim`}
         </span>
       </div>
@@ -105,12 +106,14 @@ export default function JudgePage() {
   const [career, setCareer] = useState<JudgeCareer | null>(null);
   const [seasons, setSeasons] = useState<JudgeSeasonSummary[]>([]);
   const [tournaments, setTournaments] = useState<JudgeTournamentEntry[]>([]);
+  const [panelStats, setPanelStats] = useState<JudgePanelStats | null>(null);
 
   useEffect(() => {
     const encoded = encodeURIComponent(judgeName);
     fetchApiClient<JudgeCareer>(`/judges/${encoded}`).then(setCareer);
     fetchApiClient<JudgeSeasonSummary[]>(`/judges/${encoded}/season-summary`).then(setSeasons);
     fetchApiClient<JudgeTournamentEntry[]>(`/judges/${encoded}/tournaments`).then(setTournaments);
+    fetchApiClient<JudgePanelStats>(`/judges/${encoded}/panel-stats`).then(setPanelStats);
   }, [judgeName]);
 
   if (!career) {
@@ -144,48 +147,140 @@ export default function JudgePage() {
       </h1>
       <div className="text-sm text-gray-600 mt-1">{yearRange}</div>
       <div className="text-sm mt-1 font-semibold">
-        {career.total_decisions} decisions | {affPct(career.aff_votes, career.total_decisions)} Aff |{" "}
+        {career.total_decisions} decisions | {affPct(career.aff_votes, career.aff_votes + career.neg_votes)} Aff |{" "}
         {career.tournaments} tournaments
       </div>
 
+      {/* Visual Stats */}
+      <div className="flex gap-4 mt-4" style={{ maxWidth: 600 }}>
+        {/* Aff/Neg Tendency */}
+        <div className="stat-card flex-1">
+          <div className="stat-label" style={{ marginBottom: 8 }}>Aff/Neg Tendency</div>
+          {(() => {
+            const affNegTotal = career.aff_votes + career.neg_votes;
+            return affNegTotal > 0 ? (
+              <>
+                <div style={{
+                  display: "flex", height: 24, borderRadius: 4, overflow: "hidden",
+                  border: "1px solid #ccc"
+                }}>
+                  <div style={{
+                    width: `${(career.aff_votes / affNegTotal) * 100}%`,
+                    background: "#2d6a2e", minWidth: career.aff_votes > 0 ? 2 : 0
+                  }} />
+                  <div style={{
+                    width: `${(career.neg_votes / affNegTotal) * 100}%`,
+                    background: "#a31515", minWidth: career.neg_votes > 0 ? 2 : 0
+                  }} />
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, fontSize: 12 }}>
+                  <span style={{ color: "#2d6a2e", fontWeight: 600 }}>
+                    {affPct(career.aff_votes, affNegTotal)} Aff ({career.aff_votes})
+                  </span>
+                  <span style={{ color: "#a31515", fontWeight: 600 }}>
+                    {affPct(career.neg_votes, affNegTotal)} Neg ({career.neg_votes})
+                  </span>
+                </div>
+              </>
+            ) : (
+              <div className="text-xs text-gray-400">No decisions</div>
+            );
+          })()}
+        </div>
+
+        {/* Panel Record */}
+        <div className="stat-card flex-1">
+          <div className="stat-label" style={{ marginBottom: 8 }}>Panel Record</div>
+          {panelStats && panelStats.career.panel_decisions > 0 ? (
+            <>
+              <div className="stat-value">
+                {((panelStats.career.majority / panelStats.career.panel_decisions) * 100).toFixed(1)}%
+              </div>
+              <div style={{ fontSize: 12, color: "#666", marginTop: 2 }}>
+                Top of Decision {panelStats.career.majority} of {panelStats.career.panel_decisions}
+              </div>
+              <div style={{ fontSize: 12, color: "#a31515", marginTop: 2 }}>
+                Sit {panelStats.career.panel_decisions - panelStats.career.majority} of {panelStats.career.panel_decisions}
+              </div>
+            </>
+          ) : (
+            <div className="text-xs text-gray-400">
+              {panelStats ? "No panel decisions" : "Loading..."}
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Season Summary */}
+      <div style={{ width: "fit-content" }}>
       <div className="section-header mt-4">Season Summary</div>
-      <table className="sr-table mt-1">
-        <thead>
-          <tr>
-            <th>Season</th>
-            <th className="text-right">Tourns</th>
-            <th className="text-right">Decisions</th>
-            <th className="text-right">Aff</th>
-            <th className="text-right">Neg</th>
-            <th className="text-right">Aff%</th>
-            <th className="text-right">Elims</th>
-          </tr>
-        </thead>
-        <tbody>
-          {seasons.map((s, i) => (
-            <tr key={i}>
-              <td>{s.season}</td>
-              <td className="num">{s.tournaments}</td>
-              <td className="num">{s.decisions}</td>
-              <td className="num">{s.aff_votes}</td>
-              <td className="num">{s.neg_votes}</td>
-              <td className="num">{affPct(s.aff_votes, s.decisions)}</td>
-              <td className="num">{s.elim_decisions}</td>
-            </tr>
-          ))}
-          {/* Career total */}
-          <tr className="total-row">
-            <td>Career</td>
-            <td className="num">{career.tournaments}</td>
-            <td className="num">{career.total_decisions}</td>
-            <td className="num">{career.aff_votes}</td>
-            <td className="num">{career.neg_votes}</td>
-            <td className="num">{affPct(career.aff_votes, career.total_decisions)}</td>
-            <td className="num">{seasons.reduce((sum, s) => sum + s.elim_decisions, 0)}</td>
-          </tr>
-        </tbody>
-      </table>
+      {(() => {
+        const panelBySeason: Record<string, { panel_decisions: number; majority: number }> = {};
+        if (panelStats) {
+          for (const ps of panelStats.seasons) {
+            panelBySeason[ps.season] = { panel_decisions: ps.panel_decisions, majority: ps.majority };
+          }
+        }
+        return (
+          <table className="sr-table mt-1" style={{ width: "auto" }}>
+            <thead>
+              <tr>
+                <th>Season</th>
+                <th className="text-right">Tourns</th>
+                <th className="text-right">Decisions</th>
+                <th className="text-right">Aff</th>
+                <th className="text-right">Neg</th>
+                <th className="text-right">Aff%</th>
+                <th className="text-right">Elims</th>
+                <th className="text-right">Panel</th>
+                <th className="text-right" style={{ whiteSpace: "normal", minWidth: 40 }}>Top of Decision</th>
+                <th className="text-right">Sit%</th>
+              </tr>
+            </thead>
+            <tbody>
+              {seasons.map((s, i) => {
+                const ps = panelBySeason[s.season];
+                return (
+                  <tr key={i}>
+                    <td>{s.season}</td>
+                    <td className="num">{s.tournaments}</td>
+                    <td className="num">{s.decisions}</td>
+                    <td className="num">{s.aff_votes}</td>
+                    <td className="num">{s.neg_votes}</td>
+                    <td className="num">{affPct(s.aff_votes, s.aff_votes + s.neg_votes)}</td>
+                    <td className="num">{s.elim_decisions}</td>
+                    <td className="num">{ps ? ps.panel_decisions : "-"}</td>
+                    <td className="num">{ps ? ps.majority : "-"}</td>
+                    <td className="num">
+                      {ps && ps.panel_decisions > 0
+                        ? (((ps.panel_decisions - ps.majority) / ps.panel_decisions) * 100).toFixed(1) + "%"
+                        : "-"}
+                    </td>
+                  </tr>
+                );
+              })}
+              {/* Career total */}
+              <tr className="total-row">
+                <td>Career</td>
+                <td className="num">{career.tournaments}</td>
+                <td className="num">{career.total_decisions}</td>
+                <td className="num">{career.aff_votes}</td>
+                <td className="num">{career.neg_votes}</td>
+                <td className="num">{affPct(career.aff_votes, career.aff_votes + career.neg_votes)}</td>
+                <td className="num">{seasons.reduce((sum, s) => sum + s.elim_decisions, 0)}</td>
+                <td className="num">{panelStats ? panelStats.career.panel_decisions : "-"}</td>
+                <td className="num">{panelStats ? panelStats.career.majority : "-"}</td>
+                <td className="num">
+                  {panelStats && panelStats.career.panel_decisions > 0
+                    ? (((panelStats.career.panel_decisions - panelStats.career.majority) / panelStats.career.panel_decisions) * 100).toFixed(1) + "%"
+                    : "-"}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        );
+      })()}
+      </div>
 
       {/* Tournament Log */}
       <div className="section-header">Tournament Log</div>

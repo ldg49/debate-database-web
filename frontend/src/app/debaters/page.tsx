@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import type { DebaterCareer } from "@/lib/types";
 import { fetchApiClient } from "@/lib/api";
 import { winPct, formatSP } from "@/lib/utils";
@@ -10,7 +10,6 @@ export default function DebatersPage() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<DebaterCareer[]>([]);
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
@@ -71,15 +70,11 @@ export default function DebatersPage() {
           </thead>
           <tbody>
             {results.map((d) => (
-              <tr
-                key={d.debater_code}
-                className="cursor-pointer"
-                onClick={() => router.push(`/debaters/${d.debater_code}`)}
-              >
+              <tr key={d.debater_code}>
                 <td>
-                  <a className="sr-link">
+                  <Link href={`/debaters/${d.debater_code}`} className="sr-link">
                     {d.last_name}, {d.first_name}
-                  </a>
+                  </Link>
                 </td>
                 <td className="num">{d.total_wins}</td>
                 <td className="num">{d.total_losses}</td>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import type { TournamentSearchResult } from "@/lib/types";
 import { fetchApiClient } from "@/lib/api";
 
@@ -22,7 +22,6 @@ export default function TournamentsPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
-  const router = useRouter();
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Load seasons on mount, default to most recent
@@ -111,24 +110,22 @@ export default function TournamentsPage() {
           <p className="text-xs text-gray-500 mb-2">
             {total} tournament{total !== 1 ? "s" : ""}
           </p>
-          <table className="sr-table" style={{ maxWidth: 700 }}>
+          <table className="sr-table" style={{ maxWidth: 800 }}>
             <thead>
               <tr>
                 <th>Tournament</th>
+                <th>Host</th>
                 <th>Season</th>
                 <th>Date</th>
               </tr>
             </thead>
             <tbody>
               {results.map((t) => (
-                <tr
-                  key={t.id}
-                  className="cursor-pointer"
-                  onClick={() => router.push(`/tournaments/${t.id}`)}
-                >
+                <tr key={t.id}>
                   <td>
-                    <a className="sr-link">{t.name}</a>
+                    <Link href={`/tournaments/${t.id}`} className="sr-link">{t.display_name || t.name}</Link>
                   </td>
+                  <td className="text-gray-500">{t.host_school || "-"}</td>
                   <td>{t.season}</td>
                   <td>{t.start_date ? new Date(t.start_date).toLocaleDateString() : "-"}</td>
                 </tr>

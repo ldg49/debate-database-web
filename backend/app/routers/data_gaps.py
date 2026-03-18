@@ -1,12 +1,17 @@
 from fastapi import APIRouter, Query
 from ..database import get_pool
 from ..queries import data_gaps_queries as q
+from ..cache import response_cache
 
 router = APIRouter(tags=["data-gaps"])
 
 
 @router.get("/data-gaps")
 async def get_data_gaps(season: str = Query(None)):
+    cache_key = f"data-gaps:{season}"
+    if cache_key in response_cache:
+        return response_cache[cache_key]
+
     pool = await get_pool()
     if season:
         rows = await pool.fetch(q.TOURNAMENT_GAPS_BY_SEASON, season)
@@ -104,4 +109,6 @@ async def get_data_gaps(season: str = Query(None)):
             }
         )
 
-    return {"tournaments": tournaments, "summary": summary}
+    result = {"tournaments": tournaments, "summary": summary}
+    response_cache[cache_key] = result
+    return result

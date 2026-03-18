@@ -79,6 +79,21 @@ export default async function Home() {
             Ask questions in plain English and get answers powered by AI.
           </p>
         </Link>
+        <Link
+          href="/data-gaps"
+          className="block p-4 border border-gray-200 rounded hover:border-blue-300 no-underline"
+        >
+          <h2
+            className="text-sm font-bold mb-1"
+            style={{ color: "var(--sr-navy)" }}
+          >
+            Data Gaps
+          </h2>
+          <p className="text-xs text-gray-600">
+            See which tournaments have missing or incomplete data and help
+            fill in the gaps.
+          </p>
+        </Link>
       </div>
     </div>
   );

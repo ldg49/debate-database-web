@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import type { JudgeCareer } from "@/lib/types";
 import { fetchApiClient } from "@/lib/api";
 
@@ -9,7 +9,6 @@ export default function JudgesPage() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<JudgeCareer[]>([]);
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
@@ -83,15 +82,11 @@ export default function JudgesPage() {
                   ? `${firstYear}`
                   : `${firstYear}-${lastYear}`;
               return (
-                <tr
-                  key={j.name}
-                  className="cursor-pointer"
-                  onClick={() =>
-                    router.push(`/judges/${encodeURIComponent(j.name)}`)
-                  }
-                >
+                <tr key={j.name}>
                   <td>
-                    <a className="sr-link">{j.name}</a>
+                    <Link href={`/judges/${encodeURIComponent(j.name)}`} className="sr-link">
+                      {j.name}
+                    </Link>
                   </td>
                   <td className="num">{j.total_decisions}</td>
                   <td className="num">
